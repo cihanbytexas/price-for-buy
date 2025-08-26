@@ -8,6 +8,7 @@ async function fetchTrendyol(query) {
     const url = `https://www.trendyol.com/sr?q=${encodeURIComponent(query)}`;
     const { data } = await axios.get(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 5000,
     });
     const $ = cheerio.load(data);
     $("div.p-card-chldrn-cntnr").each((i, el) => {
@@ -19,7 +20,7 @@ async function fetchTrendyol(query) {
       if (name && price) results.push({ site: "Trendyol", name, price, link });
     });
   } catch (e) {
-    console.log("Trendyol error", e.message);
+    console.log("Trendyol error:", e.message);
   }
   return results;
 }
@@ -30,6 +31,7 @@ async function fetchHepsiburada(query) {
     const url = `https://www.hepsiburada.com/ara?q=${encodeURIComponent(query)}`;
     const { data } = await axios.get(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 5000,
     });
     const $ = cheerio.load(data);
     $("li.search-item").each((i, el) => {
@@ -41,18 +43,18 @@ async function fetchHepsiburada(query) {
       if (name && price) results.push({ site: "Hepsiburada", name, price, link });
     });
   } catch (e) {
-    console.log("Hepsiburada error", e.message);
+    console.log("Hepsiburada error:", e.message);
   }
   return results;
 }
 
-// Amazon TR scraping (örnek)
 async function fetchAmazon(query) {
   const results = [];
   try {
     const url = `https://www.amazon.com.tr/s?k=${encodeURIComponent(query)}`;
     const { data } = await axios.get(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 5000,
     });
     const $ = cheerio.load(data);
     $("div.s-main-slot div.s-result-item").each((i, el) => {
@@ -64,18 +66,18 @@ async function fetchAmazon(query) {
       if (name && price) results.push({ site: "Amazon", name, price, link });
     });
   } catch (e) {
-    console.log("Amazon error", e.message);
+    console.log("Amazon error:", e.message);
   }
   return results;
 }
 
-// N11 scraping
 async function fetchN11(query) {
   const results = [];
   try {
     const url = `https://www.n11.com/arama?q=${encodeURIComponent(query)}`;
     const { data } = await axios.get(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 5000,
     });
     const $ = cheerio.load(data);
     $("li.column").each((i, el) => {
@@ -87,7 +89,7 @@ async function fetchN11(query) {
       if (name && price) results.push({ site: "N11", name, price, link });
     });
   } catch (e) {
-    console.log("N11 error", e.message);
+    console.log("N11 error:", e.message);
   }
   return results;
 }
@@ -96,20 +98,24 @@ export default async function handler(req, res) {
   const query = req.query.query;
   if (!query) return res.status(400).json({ error: "Query param required" });
 
-  // Tüm siteleri paralel çek
-  const [trendyol, hepsiburada, amazon, n11] = await Promise.all([
-    fetchTrendyol(query),
-    fetchHepsiburada(query),
-    fetchAmazon(query),
-    fetchN11(query),
-  ]);
+  try {
+    const [trendyol, hepsiburada, amazon, n11] = await Promise.all([
+      fetchTrendyol(query),
+      fetchHepsiburada(query),
+      fetchAmazon(query),
+      fetchN11(query),
+    ]);
 
-  const results = [...trendyol, ...hepsiburada, ...amazon, ...n11];
+    const results = [...trendyol, ...hepsiburada, ...amazon, ...n11];
 
-  // En ucuz ürün
-  const cheapest = results.reduce((prev, curr) =>
-    !prev || curr.price < prev.price ? curr : prev
-  , null);
+    const cheapest = results.reduce(
+      (prev, curr) => (!prev || curr.price < prev.price ? curr : prev),
+      null
+    );
 
-  res.status(200).json({ product: query, results, cheapest });
+    res.status(200).json({ product: query, results, cheapest });
+  } catch (err) {
+    console.log("API error:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 }
